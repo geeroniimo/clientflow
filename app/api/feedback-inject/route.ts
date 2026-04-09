@@ -15,19 +15,19 @@ const corsHeaders = {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { 
-      user_id,
-      content, 
-      page_url, 
-      position_x_percent, 
+    const {
+      project_id,
+      content,
+      page_url,
+      position_x_percent,
       position_y_percent,
       viewport_width,
       viewport_height,
-      breakpoint 
+      breakpoint
     } = body
 
     console.log('📥 Feedback from injected script:', {
-      user_id,
+      project_id,
       content,
       page_url,
       position_x_percent,
@@ -35,29 +35,29 @@ export async function POST(request: NextRequest) {
       breakpoint
     })
 
-    if (!user_id) {
-      return NextResponse.json({ error: 'User ID required' }, { 
+    if (!project_id) {
+      return NextResponse.json({ error: 'Project ID required' }, {
         status: 400,
         headers: corsHeaders
       })
     }
 
-    // Verificar que el usuario existe
-    const { data: user, error: userError } = await supabase
-      .from('user_profiles')
+    // Verify project exists
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
       .select('id')
-      .eq('id', user_id)
+      .eq('id', project_id)
       .single()
 
-    if (userError || !user) {
-      console.error('❌ User not found:', user_id)
-      return NextResponse.json({ error: 'Invalid user' }, { 
+    if (projectError || !project) {
+      console.error('❌ Project not found:', project_id)
+      return NextResponse.json({ error: 'Invalid project' }, {
         status: 404,
         headers: corsHeaders
       })
     }
 
-    console.log('✅ User found:', user_id)
+    console.log('✅ Project found:', project_id)
 
     let screenshotUrl = null
 
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     const { data: feedback, error: feedbackError } = await supabase
       .from('feedbacks')
       .insert({
-        user_id: user_id,
+        project_id: project_id,
         content,
         screenshot_url: screenshotUrl,
         page_url,

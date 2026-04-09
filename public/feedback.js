@@ -8,15 +8,15 @@
   
   console.log('🎯 ClientFlow: Script loaded');
   
-  const userId = window.clientFlowUserId;
+  const projectId = window.clientFlowProjectId;
   const apiUrl = window.clientFlowApiUrl || 'https://nonotubbly-unenthusiastic-catherina.ngrok-free.dev';
-  
-  if (!userId) {
-    console.error('❌ ClientFlow: No user ID found');
+
+  if (!projectId) {
+    console.error('❌ ClientFlow: No project ID found');
     return;
   }
-  
-  console.log('✅ ClientFlow: User ID found:', userId);
+
+  console.log('✅ ClientFlow: Project ID found:', projectId);
   
   let feedbackMode = false;
   let sidebar = null;
@@ -222,7 +222,7 @@
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          user_id: userId,
+          project_id: projectId,
           content: content,
           page_url: window.location.href,
           position_x_percent: clickedPosition.xPercent,
