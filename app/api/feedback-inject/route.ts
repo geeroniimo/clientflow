@@ -29,29 +29,37 @@ function err(msg: string, status = 500) {
 export async function GET(request: NextRequest) {
   try {
     const project_id = request.nextUrl.searchParams.get('project_id')
-    const page_url   = request.nextUrl.searchParams.get('page_url')
-
     if (!project_id) return err('project_id required', 400)
 
-    // Use service role key to bypass RLS for public dot rendering
-    const serviceSupabase = createClient(
+    const serviceClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    const { data, error } = await serviceSupabase
+    // Return ALL feedbacks for project (no position filter, no status filter)
+    // so we can debug what's actually in the DB
+    const { data, error } = await serviceClient
       .from('feedbacks')
       .select('id, content, position_x_percent, position_y_percent, status, created_at, page_url, breakpoint')
       .eq('project_id', project_id)
-      .neq('status', 'resolved')
-      .not('position_x_percent', 'is', null)
       .order('created_at', { ascending: false })
 
     if (error) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 500, headers: cors })
     }
 
-    return ok({ feedbacks: data || [] })
+    // Only show non-resolved with position for the widget dots
+    const dots = (data || []).filter(
+      (f: any) => f.status !== 'resolved' && f.position_x_percent != null
+    )
+
+    return ok({
+      feedbacks: dots,
+      _debug: {
+        total_in_db: data?.length,
+        sample: data?.[0] // show first record so we can see structure
+      }
+    })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500, headers: cors })
   }
@@ -73,44 +81,43 @@ export async function POST(request: NextRequest) {
       .from('projects').select('id').eq('id', project_id).single()
     if (projectErr || !project) return err('Invalid project', 404)
 
-    // Upload screenshot if provided (client-side base64 JPEG)
+    // Upload screenshot if provided
     let screenshotUrl: string | null = null
     if (screenshot_base64) {
       try {
         const base64Data = screenshot_base64.replace(/^data:image\/\w+;base64,/, '')
         const buf = Buffer.from(base64Data, 'base64')
         const path = `${project_id}/${Date.now()}.jpg`
-
         const { data: up, error: upErr } = await supabase.storage
           .from('screenshots')
           .upload(path, buf, { contentType: 'image/jpeg', cacheControl: '3600', upsert: false })
-
         if (!upErr && up) {
           screenshotUrl = supabase.storage.from('screenshots').getPublicUrl(up.path).data.publicUrl
-        } else {
-          console.error('Screenshot upload error:', upErr)
         }
       } catch (e) {
-        console.error('Screenshot processing error:', e instanceof Error ? e.message : e)
+        console.error('Screenshot error:', e)
       }
     }
 
-    // Save feedback
+    // Save feedback — log what we're inserting
+    const insertData = {
+      project_id, content, screenshot_url: screenshotUrl,
+      page_url, position_x_percent, position_y_percent,
+      viewport_width, viewport_height, breakpoint, status: 'open',
+    }
+    console.log('Inserting feedback:', JSON.stringify(insertData))
+
     const { data: feedback, error: fbErr } = await supabase
       .from('feedbacks')
-      .insert({
-        project_id, content, screenshot_url: screenshotUrl,
-        page_url, position_x_percent, position_y_percent,
-        viewport_width, viewport_height, breakpoint, status: 'open',
-      })
+      .insert(insertData)
       .select().single()
 
     if (fbErr) {
       console.error('Feedback insert error:', fbErr)
-      return err('Failed to save feedback')
+      return err(`Failed to save: ${fbErr.message}`)
     }
 
-    return ok({ success: true, feedback_id: feedback.id })
+    return ok({ success: true, feedback_id: feedback.id, saved: insertData })
   } catch (e) {
     console.error('API error:', e)
     return err('Internal server error')
