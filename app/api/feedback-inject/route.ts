@@ -8,121 +8,96 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+const cors = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Max-Age': '86400',
+}
+
+// Preflight
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: cors })
+}
+
 const BP_DIMS: Record<string, { w: number; h: number }> = {
   Desktop: { w: 1440, h: 900 },
   Tablet:  { w: 810,  h: 1080 },
   Mobile:  { w: 390,  h: 844 },
 }
 
+function ok(data: object) {
+  return NextResponse.json(data, { headers: cors })
+}
+function err(msg: string, status = 500) {
+  return NextResponse.json({ error: msg }, { status, headers: cors })
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
     const {
-      project_id,
-      content,
-      page_url,
-      position_x_percent,
-      position_y_percent,
-      viewport_width,
-      viewport_height,
-      breakpoint,
-    } = body
+      project_id, content, page_url,
+      position_x_percent, position_y_percent,
+      viewport_width, viewport_height, breakpoint,
+    } = await request.json()
 
-    console.log('📥 Feedback received:', { project_id, page_url, breakpoint })
+    if (!project_id || !content) return err('project_id and content are required', 400)
 
-    if (!project_id || !content) {
-      return NextResponse.json({ error: 'project_id and content are required' }, { status: 400 })
-    }
+    // Verify project
+    const { data: project, error: projectErr } = await supabase
+      .from('projects').select('id').eq('id', project_id).single()
+    if (projectErr || !project) return err('Invalid project', 404)
 
-    // Verify project exists
-    const { data: project, error: projectError } = await supabase
-      .from('projects')
-      .select('id')
-      .eq('id', project_id)
-      .single()
-
-    if (projectError || !project) {
-      console.error('❌ Project not found:', project_id)
-      return NextResponse.json({ error: 'Invalid project' }, { status: 404 })
-    }
-
-    // Take screenshot with blue dot server-side (best-effort)
+    // Server-side screenshot with blue dot (best-effort)
     let screenshotUrl: string | null = null
     if (page_url) {
       try {
         const dim = BP_DIMS[breakpoint] || BP_DIMS.Desktop
-        const baseUrl = process.env.VERCEL_URL
+        const base = process.env.VERCEL_URL
           ? `https://${process.env.VERCEL_URL}`
           : 'http://localhost:3000'
 
-        const screenshotResp = await fetch(`${baseUrl}/api/screenshot`, {
+        const res = await fetch(`${base}/api/screenshot`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            url: page_url,
-            width: dim.w,
-            height: dim.h,
+            url: page_url, width: dim.w, height: dim.h,
             dotXPercent: position_x_percent,
             dotYPercent: position_y_percent,
           }),
           signal: AbortSignal.timeout(25000),
         })
 
-        if (screenshotResp.ok) {
-          const buffer = Buffer.from(await screenshotResp.arrayBuffer())
-          const filename = `${project_id}/${Date.now()}-${breakpoint || 'Desktop'}.png`
-
-          const { data: upload, error: uploadError } = await supabase.storage
+        if (res.ok) {
+          const buf = Buffer.from(await res.arrayBuffer())
+          const path = `${project_id}/${Date.now()}-${breakpoint || 'Desktop'}.png`
+          const { data: up, error: upErr } = await supabase.storage
             .from('screenshots')
-            .upload(filename, buffer, { contentType: 'image/png', cacheControl: '3600', upsert: false })
-
-          if (!uploadError) {
-            const { data: { publicUrl } } = supabase.storage
-              .from('screenshots')
-              .getPublicUrl(upload.path)
-            screenshotUrl = publicUrl
-            console.log('✅ Screenshot uploaded:', screenshotUrl)
-          } else {
-            console.error('❌ Upload error:', uploadError)
+            .upload(path, buf, { contentType: 'image/png', cacheControl: '3600', upsert: false })
+          if (!upErr) {
+            screenshotUrl = supabase.storage.from('screenshots').getPublicUrl(up.path).data.publicUrl
           }
-        } else {
-          console.error('❌ Screenshot API returned', screenshotResp.status)
         }
-      } catch (err) {
-        console.error('❌ Screenshot skipped:', err instanceof Error ? err.message : err)
+      } catch (e) {
+        console.error('Screenshot skipped:', e instanceof Error ? e.message : e)
       }
     }
 
-    // Save feedback (always succeeds, even without screenshot)
-    const { data: feedback, error: feedbackError } = await supabase
+    // Save feedback
+    const { data: feedback, error: fbErr } = await supabase
       .from('feedbacks')
       .insert({
-        project_id,
-        content,
-        screenshot_url: screenshotUrl,
-        page_url,
-        position_x_percent,
-        position_y_percent,
-        viewport_width,
-        viewport_height,
-        breakpoint,
-        status: 'open',
+        project_id, content, screenshot_url: screenshotUrl,
+        page_url, position_x_percent, position_y_percent,
+        viewport_width, viewport_height, breakpoint, status: 'open',
       })
-      .select()
-      .single()
+      .select().single()
 
-    if (feedbackError) {
-      console.error('❌ Feedback save error:', feedbackError)
-      return NextResponse.json({ error: 'Failed to save feedback' }, { status: 500 })
-    }
+    if (fbErr) return err('Failed to save feedback')
 
-    console.log('✅ Feedback saved:', feedback.id)
-    return NextResponse.json({ success: true, feedback_id: feedback.id })
-  } catch (error) {
-    console.error('❌ API error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown' },
-      { status: 500 }
-    )
+    return ok({ success: true, feedback_id: feedback.id })
+  } catch (e) {
+    console.error('API error:', e)
+    return err('Internal server error')
   }
 }
