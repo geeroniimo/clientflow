@@ -44,21 +44,14 @@ export async function GET(request: NextRequest) {
       .select('id, content, position_x_percent, position_y_percent, status, created_at, page_url, breakpoint')
       .eq('project_id', project_id)
       .neq('status', 'resolved')
+      .not('position_x_percent', 'is', null)
       .order('created_at', { ascending: false })
 
     if (error) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 500, headers: cors })
     }
 
-    // Filter: has position, and page_url matches (normalized, trailing slash stripped)
-    const normalize = (u: string) => u.replace(/\/+$/, '').split('?')[0]
-    const filtered = (data || []).filter((f: any) => {
-      if (f.position_x_percent == null || f.position_y_percent == null) return false
-      if (page_url && f.page_url) return normalize(f.page_url) === normalize(page_url)
-      return true
-    })
-
-    return ok({ feedbacks: filtered })
+    return ok({ feedbacks: data || [] })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500, headers: cors })
   }
