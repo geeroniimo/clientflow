@@ -10,7 +10,7 @@ const supabase = createClient(
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Max-Age': '86400',
 }
@@ -24,6 +24,35 @@ function ok(data: object) {
 }
 function err(msg: string, status = 500) {
   return NextResponse.json({ error: msg }, { status, headers: cors })
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const project_id = request.nextUrl.searchParams.get('project_id')
+    const page_url   = request.nextUrl.searchParams.get('page_url')
+
+    if (!project_id) return err('project_id required', 400)
+
+    let query = supabase
+      .from('feedbacks')
+      .select('id, content, position_x_percent, position_y_percent, status, created_at, page_url, breakpoint')
+      .eq('project_id', project_id)
+      .not('position_x_percent', 'is', null)
+      .not('status', 'eq', 'resolved')
+      .order('created_at', { ascending: false })
+
+    if (page_url) {
+      query = query.eq('page_url', page_url)
+    }
+
+    const { data, error } = await query
+    if (error) return err('Failed to fetch feedbacks')
+
+    return ok({ feedbacks: data || [] })
+  } catch (e) {
+    console.error('GET error:', e)
+    return err('Internal server error')
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -46,7 +75,6 @@ export async function POST(request: NextRequest) {
     let screenshotUrl: string | null = null
     if (screenshot_base64) {
       try {
-        // Strip data URL prefix → raw base64
         const base64Data = screenshot_base64.replace(/^data:image\/\w+;base64,/, '')
         const buf = Buffer.from(base64Data, 'base64')
         const path = `${project_id}/${Date.now()}.jpg`
