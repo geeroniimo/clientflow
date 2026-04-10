@@ -37,8 +37,7 @@ export async function GET(request: NextRequest) {
       .from('feedbacks')
       .select('id, content, position_x_percent, position_y_percent, status, created_at, page_url, breakpoint')
       .eq('project_id', project_id)
-      .not('position_x_percent', 'is', null)
-      .not('status', 'eq', 'resolved')
+      .neq('status', 'resolved')
       .order('created_at', { ascending: false })
 
     if (page_url) {
@@ -46,9 +45,17 @@ export async function GET(request: NextRequest) {
     }
 
     const { data, error } = await query
-    if (error) return err('Failed to fetch feedbacks')
+    if (error) {
+      console.error('Supabase GET error:', JSON.stringify(error))
+      return err('Failed to fetch feedbacks')
+    }
 
-    return ok({ feedbacks: data || [] })
+    // Filter out entries without position client-side
+    const withPosition = (data || []).filter(
+      (f: any) => f.position_x_percent != null && f.position_y_percent != null
+    )
+
+    return ok({ feedbacks: withPosition })
   } catch (e) {
     console.error('GET error:', e)
     return err('Internal server error')
