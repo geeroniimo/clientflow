@@ -33,32 +33,34 @@ export async function GET(request: NextRequest) {
 
     if (!project_id) return err('project_id required', 400)
 
-    let query = supabase
+    // Use service role key to bypass RLS for public dot rendering
+    const serviceSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    const { data, error } = await serviceSupabase
       .from('feedbacks')
       .select('id, content, position_x_percent, position_y_percent, status, created_at, page_url, breakpoint')
       .eq('project_id', project_id)
       .neq('status', 'resolved')
       .order('created_at', { ascending: false })
 
-    if (page_url) {
-      query = query.eq('page_url', page_url)
-    }
-
-    const { data, error } = await query
     if (error) {
-      console.error('Supabase GET error:', JSON.stringify(error))
-      return err('Failed to fetch feedbacks')
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 500, headers: cors })
     }
 
-    // Filter out entries without position client-side
-    const withPosition = (data || []).filter(
-      (f: any) => f.position_x_percent != null && f.position_y_percent != null
-    )
+    // Filter: has position, and page_url matches (normalized, trailing slash stripped)
+    const normalize = (u: string) => u.replace(/\/+$/, '').split('?')[0]
+    const filtered = (data || []).filter((f: any) => {
+      if (f.position_x_percent == null || f.position_y_percent == null) return false
+      if (page_url && f.page_url) return normalize(f.page_url) === normalize(page_url)
+      return true
+    })
 
-    return ok({ feedbacks: withPosition })
+    return ok({ feedbacks: filtered })
   } catch (e) {
-    console.error('GET error:', e)
-    return err('Internal server error')
+    return NextResponse.json({ error: String(e) }, { status: 500, headers: cors })
   }
 }
 
