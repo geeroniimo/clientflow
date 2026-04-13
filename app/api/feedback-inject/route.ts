@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       .eq('project_id', project_id)
       .neq('status', 'resolved')
       .not('position_x_percent', 'is', null)
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: true })
 
     if (error) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 500, headers: cors })
