@@ -29,6 +29,7 @@ function err(msg: string, status = 500) {
 export async function GET(request: NextRequest) {
   try {
     const project_id = request.nextUrl.searchParams.get('project_id')
+    const page_url   = request.nextUrl.searchParams.get('page_url')
     if (!project_id) return err('project_id required', 400)
 
     const serviceClient = createClient(
@@ -36,30 +37,27 @@ export async function GET(request: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Return ALL feedbacks for project (no position filter, no status filter)
-    // so we can debug what's actually in the DB
     const { data, error } = await serviceClient
       .from('feedbacks')
       .select('id, content, position_x_percent, position_y_percent, status, created_at, page_url, breakpoint')
       .eq('project_id', project_id)
+      .neq('status', 'resolved')
+      .not('position_x_percent', 'is', null)
       .order('created_at', { ascending: false })
 
     if (error) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 500, headers: cors })
     }
 
-    // Only show non-resolved with position for the widget dots
-    const dots = (data || []).filter(
-      (f: any) => f.status !== 'resolved' && f.position_x_percent != null
+    // Normalize: strip trailing slashes and query string, lowercase
+    const norm = (u: string) => (u || '').toLowerCase().replace(/\/+$/, '').split('?')[0]
+    const currentPage = norm(page_url || '')
+
+    const dots = (data || []).filter((f: any) =>
+      !page_url || norm(f.page_url) === currentPage
     )
 
-    return ok({
-      feedbacks: dots,
-      _debug: {
-        total_in_db: data?.length,
-        sample: data?.[0] // show first record so we can see structure
-      }
-    })
+    return ok({ feedbacks: dots })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500, headers: cors })
   }
