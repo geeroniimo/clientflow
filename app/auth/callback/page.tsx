@@ -1,15 +1,23 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 /**
  * OAuth callback page.
- * After Google (or any provider) redirects here, the access_token and
- * refresh_token are in the URL hash (implicit flow).
- * We post them back to the plugin popup opener and close this window.
+ * Tokens arrive in the URL hash (implicit flow).
+ * We save them to the `pending_auth` Supabase table so the plugin
+ * can poll and pick them up — needed because window.opener is null
+ * when Framer (Electron) opens the popup in the system browser.
  */
 export default function AuthCallback() {
   const [status, setStatus] = useState<'processing' | 'done' | 'error'>('processing')
+  const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
     const hash = window.location.hash.substring(1)
@@ -18,23 +26,56 @@ export default function AuthCallback() {
     const refresh_token = params.get('refresh_token') ?? ''
     const error_description = params.get('error_description')
 
+    // Also check for state param in the query string (passed from plugin)
+    const queryParams = new URLSearchParams(window.location.search)
+    const state = queryParams.get('state')
+
     if (error_description) {
+      setErrorMsg(error_description)
       setStatus('error')
       return
     }
 
-    if (access_token) {
-      if (window.opener) {
-        window.opener.postMessage(
-          { type: 'CF_OAUTH_CALLBACK', access_token, refresh_token },
-          '*'
-        )
-        window.close()
-      }
-      setStatus('done')
-    } else {
+    if (!access_token) {
+      setErrorMsg('No access token received.')
       setStatus('error')
+      return
     }
+
+    const save = async () => {
+      // First try window.opener (works in browser-based plugins)
+      if (window.opener) {
+        try {
+          window.opener.postMessage(
+            { type: 'CF_OAUTH_CALLBACK', access_token, refresh_token },
+            '*'
+          )
+          window.close()
+          setStatus('done')
+          return
+        } catch (_) {
+          // Fall through to server-side relay
+        }
+      }
+
+      // Server-side relay: save to pending_auth table so the plugin can poll
+      if (state) {
+        const { error } = await supabase.from('pending_auth').upsert({
+          state,
+          access_token,
+          refresh_token,
+        })
+        if (error) {
+          setErrorMsg('Failed to relay session: ' + error.message)
+          setStatus('error')
+          return
+        }
+      }
+
+      setStatus('done')
+    }
+
+    save()
   }, [])
 
   return (
@@ -47,6 +88,8 @@ export default function AuthCallback() {
       fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
       color: '#111',
       gap: 12,
+      padding: 24,
+      textAlign: 'center',
     }}>
       {status === 'processing' && (
         <>
@@ -56,14 +99,18 @@ export default function AuthCallback() {
       )}
       {status === 'done' && (
         <>
-          <div style={{ fontSize: 32 }}>✅</div>
-          <p style={{ fontSize: 15, margin: 0 }}>Signed in! You can close this window.</p>
+          <div style={{ fontSize: 40 }}>✅</div>
+          <p style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Signed in!</p>
+          <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>
+            You can close this window and return to the plugin.
+          </p>
         </>
       )}
       {status === 'error' && (
         <>
           <div style={{ fontSize: 32 }}>❌</div>
-          <p style={{ fontSize: 15, margin: 0 }}>Something went wrong. Please try again.</p>
+          <p style={{ fontSize: 15, margin: 0 }}>Something went wrong.</p>
+          {errorMsg && <p style={{ fontSize: 12, color: '#ef4444', margin: 0 }}>{errorMsg}</p>}
         </>
       )}
     </div>
