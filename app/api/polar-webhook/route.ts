@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { Polar } from '@polar-sh/sdk'
 import { validateEvent, WebhookVerificationError } from '@polar-sh/sdk/webhooks'
 
-// Supabase admin client — bypasses RLS so we can update any user's profile
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Polar sends the raw body for signature verification — we must read it as text
 export async function POST(request: NextRequest) {
   const rawBody = await request.text()
 
@@ -26,12 +25,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Webhook verification failed' }, { status: 400 })
   }
 
-  // order.created fires for every order (purchase, subscription start, renewal).
-  // We only activate the account when the order is actually paid.
   if (event.type === 'order.created') {
-    const order = (event as { data: { id: string; paid: boolean; metadata?: Record<string, string> } }).data
+    const order = (event as {
+      data: {
+        id: string
+        paid: boolean
+        customerId: string
+        metadata?: Record<string, string>
+      }
+    }).data
 
-    // Skip unpaid orders (e.g. free trials, pending invoices)
     if (!order.paid) {
       return NextResponse.json({ received: true, skipped: 'order not paid' })
     }
@@ -43,11 +46,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true, warning: 'No supabase_user_id in metadata' })
     }
 
+    // Tag the Polar customer with the Supabase userId as externalCustomerId
+    // so the customer portal lookup works by external ID going forward
+    try {
+      const polar = new Polar({ accessToken: process.env.POLAR_ACCESS_TOKEN! })
+      await polar.customers.update({
+        id: order.customerId,
+        customerUpdate: { externalId: userId },
+      })
+    } catch {
+      // Non-fatal — portal will fall back to email lookup
+    }
+
     const { error } = await supabase
       .from('user_profiles')
       .update({
         subscription_status: 'active',
-        subscription_id: order.id,
+        subscription_id: order.customerId, // store Polar customerId for portal lookups
         subscription_plan: 'pro',
       })
       .eq('id', userId)
@@ -57,6 +72,5 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Always 200 — Polar retries on any non-2xx response
   return NextResponse.json({ received: true })
 }
