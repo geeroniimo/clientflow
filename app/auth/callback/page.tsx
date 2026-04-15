@@ -26,7 +26,6 @@ export default function AuthCallback() {
     const refresh_token = params.get('refresh_token') ?? ''
     const error_description = params.get('error_description')
 
-    // Also check for state param in the query string (passed from plugin)
     const queryParams = new URLSearchParams(window.location.search)
     const state = queryParams.get('state')
 
@@ -43,7 +42,6 @@ export default function AuthCallback() {
     }
 
     const save = async () => {
-      // First try window.opener (works in browser-based plugins)
       if (window.opener) {
         try {
           window.opener.postMessage(
@@ -58,7 +56,6 @@ export default function AuthCallback() {
         }
       }
 
-      // Server-side relay: save to pending_auth table so the plugin can poll
       if (state) {
         const { error } = await supabase.from('pending_auth').upsert({
           state,
@@ -78,54 +75,25 @@ export default function AuthCallback() {
     save()
   }, [])
 
-  const states = {
-    processing: {
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style={{ animation: 'spin 1s linear infinite' }}>
-          <circle cx="12" cy="12" r="10" stroke="#e5e7eb" strokeWidth="2.5"/>
-          <path d="M12 2a10 10 0 0 1 10 10" stroke="#7C3AED" strokeWidth="2.5" strokeLinecap="round"/>
-        </svg>
-      ),
-      iconBg: 'rgba(124,58,237,0.08)',
-      iconBorder: 'rgba(124,58,237,0.15)',
-      title: 'Signing you in…',
-      subtitle: 'Completing authentication with Google.',
-    },
-    done: {
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="10" fill="rgba(34,197,94,0.12)" stroke="rgba(34,197,94,0.3)" strokeWidth="1.5"/>
-          <path d="M7.5 12l3 3 6-6" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      ),
-      iconBg: 'rgba(34,197,94,0.08)',
-      iconBorder: 'rgba(34,197,94,0.2)',
-      title: 'You\'re signed in',
-      subtitle: 'Return to the plugin — you can close this window.',
-    },
-    error: {
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="10" fill="rgba(239,68,68,0.1)" stroke="rgba(239,68,68,0.25)" strokeWidth="1.5"/>
-          <path d="M12 8v4M12 16h.01" stroke="#dc2626" strokeWidth="2" strokeLinecap="round"/>
-        </svg>
-      ),
-      iconBg: 'rgba(239,68,68,0.07)',
-      iconBorder: 'rgba(239,68,68,0.18)',
-      title: 'Something went wrong',
-      subtitle: errorMsg || 'Please close this window and try again.',
-    },
-  }
-
-  const s = states[status]
-
   return (
     <>
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #fafafa; }
-        @media (prefers-color-scheme: dark) { body { background: #0f0f0f; } .card { background: #1a1a1a !important; border-color: #2a2a2a !important; } .title { color: #f5f5f5 !important; } .sub { color: #71717a !important; } .brand { color: #f5f5f5 !important; } }
+        body {
+          background: #f5f5f7;
+          font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+          -webkit-font-smoothing: antialiased;
+        }
+        @media (prefers-color-scheme: dark) {
+          body { background: #0a0a0a; }
+          .cf-card { background: #141414 !important; border-color: rgba(255,255,255,0.08) !important; }
+          .cf-title { color: #f5f5f5 !important; }
+          .cf-sub { color: #71717a !important; }
+          .cf-brand { color: #f5f5f5 !important; }
+          .cf-footer { color: #3f3f46 !important; }
+          .cf-btn-secondary { border-color: rgba(255,255,255,0.12) !important; color: #71717a !important; }
+        }
       `}</style>
 
       <div style={{
@@ -134,120 +102,229 @@ export default function AuthCallback() {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        padding: '24px 20px',
-        backgroundColor: '#fafafa',
+        padding: 24,
       }}>
 
-        {/* Card */}
-        <div className="card" style={{
+        <div className="cf-card" style={{
           width: '100%',
-          maxWidth: 340,
+          maxWidth: 330,
           backgroundColor: '#ffffff',
-          border: '1px solid #e5e7eb',
-          borderRadius: 16,
-          padding: '32px 28px',
+          border: '1px solid rgba(0,0,0,0.08)',
+          borderRadius: 20,
+          padding: 32,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: 0,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06)',
         }}>
 
-          {/* Logo */}
+          {/* Wordmark */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 32 }}>
             <svg width="24" height="24" viewBox="0 0 40 40" fill="none">
-              <rect width="40" height="40" rx="10" fill="#7C3AED"/>
+              <rect width="40" height="40" rx="12" fill="#7C3AED"/>
               <path d="M12 20.5l6 6 10-12" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <span className="brand" style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.3px', color: '#111' }}>
+            <span className="cf-brand" style={{
+              fontSize: 15,
+              fontWeight: 700,
+              letterSpacing: '-0.3px',
+              color: '#09090b',
+            }}>
               ClientFlow
             </span>
           </div>
 
-          {/* Status icon */}
-          <div style={{
-            width: 56,
-            height: 56,
-            borderRadius: 14,
-            backgroundColor: s.iconBg,
-            border: `1px solid ${s.iconBorder}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 20,
-          }}>
-            {s.icon}
-          </div>
+          {status === 'processing' && <ProcessingState />}
+          {status === 'done'       && <DoneState />}
+          {status === 'error'      && <ErrorState message={errorMsg} />}
 
-          {/* Text */}
-          <h1 className="title" style={{
-            fontSize: 16,
-            fontWeight: 700,
-            color: '#111',
-            letterSpacing: '-0.3px',
-            marginBottom: 6,
-            textAlign: 'center',
-          }}>
-            {s.title}
-          </h1>
-          <p className="sub" style={{
-            fontSize: 13,
-            color: '#6b7280',
-            lineHeight: 1.55,
-            textAlign: 'center',
-            maxWidth: 240,
-          }}>
-            {s.subtitle}
-          </p>
-
-          {/* Done: close button */}
-          {status === 'done' && (
-            <button
-              onClick={() => window.close()}
-              style={{
-                marginTop: 24,
-                padding: '9px 20px',
-                backgroundColor: '#7C3AED',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-                letterSpacing: '-0.1px',
-              }}
-            >
-              Close window
-            </button>
-          )}
-
-          {/* Error: retry hint */}
-          {status === 'error' && (
-            <button
-              onClick={() => window.close()}
-              style={{
-                marginTop: 24,
-                padding: '9px 20px',
-                backgroundColor: 'transparent',
-                color: '#6b7280',
-                border: '1px solid #e5e7eb',
-                borderRadius: 8,
-                fontSize: 13,
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
-            >
-              Close and try again
-            </button>
-          )}
         </div>
 
-        {/* Footer */}
-        <p style={{ marginTop: 20, fontSize: 11, color: '#9ca3af', letterSpacing: '0.1px' }}>
+        <p className="cf-footer" style={{
+          marginTop: 20,
+          fontSize: 11,
+          color: '#a1a1aa',
+          letterSpacing: '0.1px',
+        }}>
           Secured by Supabase Auth
         </p>
       </div>
     </>
   )
+}
+
+/* ── States ─────────────────────────────────────────────────────────────────── */
+
+function ProcessingState() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, width: '100%' }}>
+      {/* Icon */}
+      <div style={{
+        width: 56,
+        height: 56,
+        borderRadius: 14,
+        backgroundColor: 'rgba(124,58,237,0.08)',
+        border: '1px solid rgba(124,58,237,0.15)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 20,
+      }}>
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          style={{ animation: 'spin 0.9s linear infinite' }}
+        >
+          <circle cx="12" cy="12" r="10" stroke="rgba(124,58,237,0.2)" strokeWidth="2.5"/>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke="#7C3AED" strokeWidth="2.5" strokeLinecap="round"/>
+        </svg>
+      </div>
+
+      {/* Text */}
+      <h1 className="cf-title" style={headingStyle}>
+        Signing you in…
+      </h1>
+      <p className="cf-sub" style={subStyle}>
+        Completing authentication with Google.
+      </p>
+    </div>
+  )
+}
+
+function DoneState() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, width: '100%' }}>
+      {/* Icon */}
+      <div style={{
+        width: 56,
+        height: 56,
+        borderRadius: 14,
+        backgroundColor: 'rgba(124,58,237,0.08)',
+        border: '1px solid rgba(124,58,237,0.15)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 20,
+      }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M5 12.5l5 5 9-9" stroke="#7C3AED" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </div>
+
+      {/* Text */}
+      <h1 className="cf-title" style={headingStyle}>
+        You're signed in
+      </h1>
+      <p className="cf-sub" style={subStyle}>
+        Return to the plugin — you can close this window.
+      </p>
+
+      {/* CTA */}
+      <button
+        onClick={() => window.close()}
+        style={primaryBtnStyle}
+        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#6D28D9')}
+        onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#7C3AED')}
+      >
+        Close window
+      </button>
+    </div>
+  )
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, width: '100%' }}>
+      {/* Icon */}
+      <div style={{
+        width: 56,
+        height: 56,
+        borderRadius: 14,
+        backgroundColor: 'rgba(239,68,68,0.07)',
+        border: '1px solid rgba(239,68,68,0.15)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 20,
+      }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M12 8v4M12 16h.01" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round"/>
+        </svg>
+      </div>
+
+      {/* Text */}
+      <h1 className="cf-title" style={headingStyle}>
+        Something went wrong
+      </h1>
+      <p className="cf-sub" style={subStyle}>
+        {message || 'Please close this window and try again.'}
+      </p>
+
+      {/* CTA */}
+      <button
+        className="cf-btn-secondary"
+        onClick={() => window.close()}
+        style={secondaryBtnStyle}
+        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.04)')}
+        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+      >
+        Close and try again
+      </button>
+    </div>
+  )
+}
+
+/* ── Shared style tokens ─────────────────────────────────────────────────────── */
+
+const headingStyle: React.CSSProperties = {
+  fontSize: 24,
+  lineHeight: '32px',
+  fontWeight: 700,
+  letterSpacing: '-0.5px',
+  color: '#09090b',
+  textAlign: 'center',
+  marginBottom: 8,
+}
+
+const subStyle: React.CSSProperties = {
+  fontSize: 16,
+  lineHeight: '24px',
+  letterSpacing: '-0.2px',
+  color: '#71717a',
+  textAlign: 'center',
+  maxWidth: 240,
+  textWrap: 'balance' as 'balance',
+  marginBottom: 24,
+}
+
+const primaryBtnStyle: React.CSSProperties = {
+  width: '100%',
+  height: 44,
+  backgroundColor: '#7C3AED',
+  color: '#ffffff',
+  border: 'none',
+  borderRadius: 14,
+  fontSize: 16,
+  lineHeight: '24px',
+  fontWeight: 600,
+  letterSpacing: '-0.4px',
+  cursor: 'pointer',
+  transition: 'background-color 0.15s ease',
+}
+
+const secondaryBtnStyle: React.CSSProperties = {
+  width: '100%',
+  height: 44,
+  backgroundColor: 'transparent',
+  color: '#71717a',
+  border: '1px solid rgba(0,0,0,0.12)',
+  borderRadius: 14,
+  fontSize: 14,
+  lineHeight: '24px',
+  fontWeight: 500,
+  letterSpacing: '-0.3px',
+  cursor: 'pointer',
+  transition: 'background-color 0.15s ease',
 }
