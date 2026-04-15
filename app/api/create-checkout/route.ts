@@ -27,9 +27,11 @@ export async function POST(request: NextRequest) {
     })
 
     const checkout = await polar.checkouts.create({
-      // Polar SDK v0.47 uses `products` (array of product IDs), not `productId`
       products: [process.env.POLAR_PRODUCT_ID!],
       customerEmail: email,
+      // externalCustomerId links the Polar customer to the Supabase user so we
+      // can create a portal session later without a separate customer lookup
+      externalCustomerId: userId,
       metadata: {
         supabase_user_id: userId,
       },
