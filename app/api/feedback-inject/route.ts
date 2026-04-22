@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await serviceClient
       .from('feedbacks')
-      .select('id, content, position_x_percent, position_y_percent, status, created_at, page_url, breakpoint')
+      .select('id, content, position_x_percent, position_y_percent, position_x2_percent, position_y2_percent, feedback_type, status, created_at, page_url, breakpoint')
       .eq('project_id', project_id)
       .neq('status', 'resolved')
       .not('position_x_percent', 'is', null)
@@ -68,8 +68,8 @@ export async function POST(request: NextRequest) {
     const {
       project_id, content, page_url,
       position_x_percent, position_y_percent,
+      position_x2_percent, position_y2_percent, feedback_type,
       viewport_width, viewport_height, breakpoint,
-      screenshot_base64,
     } = await request.json()
 
     if (!project_id || !content) return err('project_id and content are required', 400)
@@ -79,45 +79,24 @@ export async function POST(request: NextRequest) {
       .from('projects').select('id').eq('id', project_id).single()
     if (projectErr || !project) return err('Invalid project', 404)
 
-    // Upload screenshot if provided
-    let screenshotUrl: string | null = null
-    if (screenshot_base64) {
-      try {
-        const base64Data = screenshot_base64.replace(/^data:image\/\w+;base64,/, '')
-        const buf = Buffer.from(base64Data, 'base64')
-        const path = `${project_id}/${Date.now()}.jpg`
-        const { data: up, error: upErr } = await supabase.storage
-          .from('screenshots')
-          .upload(path, buf, { contentType: 'image/jpeg', cacheControl: '3600', upsert: false })
-        if (!upErr && up) {
-          screenshotUrl = supabase.storage.from('screenshots').getPublicUrl(up.path).data.publicUrl
-        }
-      } catch (e) {
-        console.error('Screenshot error:', e)
-      }
-    }
-
-    // Save feedback — log what we're inserting
     const insertData = {
-      project_id, content, screenshot_url: screenshotUrl,
+      project_id, content, screenshot_url: null,
       page_url, position_x_percent, position_y_percent,
+      position_x2_percent: position_x2_percent ?? null,
+      position_y2_percent: position_y2_percent ?? null,
+      feedback_type: feedback_type ?? 'point',
       viewport_width, viewport_height, breakpoint, status: 'open',
     }
-    console.log('Inserting feedback:', JSON.stringify(insertData))
 
     const { data: feedback, error: fbErr } = await supabase
       .from('feedbacks')
       .insert(insertData)
       .select().single()
 
-    if (fbErr) {
-      console.error('Feedback insert error:', fbErr)
-      return err(`Failed to save: ${fbErr.message}`)
-    }
+    if (fbErr) return err(`Failed to save: ${fbErr.message}`)
 
-    return ok({ success: true, feedback_id: feedback.id, saved: insertData })
-  } catch (e) {
-    console.error('API error:', e)
+    return ok({ success: true, feedback_id: feedback.id })
+  } catch {
     return err('Internal server error')
   }
 }
