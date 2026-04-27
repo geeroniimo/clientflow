@@ -46,7 +46,7 @@ export default function AuthCallback() {
         try {
           window.opener.postMessage(
             { type: 'CF_OAUTH_CALLBACK', access_token, refresh_token },
-            '*'
+            'https://clientflow.design'
           )
           window.close()
           setStatus('done')
@@ -120,17 +120,26 @@ export default function AuthCallback() {
 
           {/* Wordmark */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 32 }}>
-            <svg width="24" height="24" viewBox="0 0 40 40" fill="none">
-              <rect width="40" height="40" rx="12" fill="#7C3AED"/>
-              <path d="M12 20.5l6 6 10-12" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+            <div style={{
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              backgroundColor: 'rgba(124,58,237,0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <svg width="16" height="16" viewBox="0 0 40 40" fill="none">
+                <path d="M6 21l6 6 10-13M20 21l6 6 10-13" stroke="#7C3AED" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
             <span className="cf-brand" style={{
               fontSize: 15,
               fontWeight: 700,
               letterSpacing: '-0.3px',
-              color: '#09090b',
+              color: '#7C3AED',
             }}>
-              ClientFlow
+              Clientflow
             </span>
           </div>
 
@@ -196,23 +205,6 @@ function ProcessingState() {
 function DoneState() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, width: '100%' }}>
-      {/* Icon */}
-      <div style={{
-        width: 56,
-        height: 56,
-        borderRadius: 14,
-        backgroundColor: 'rgba(124,58,237,0.08)',
-        border: '1px solid rgba(124,58,237,0.15)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 20,
-      }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <path d="M5 12.5l5 5 9-9" stroke="#7C3AED" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </div>
-
       {/* Text */}
       <h1 className="cf-title" style={headingStyle}>
         You're signed in
@@ -224,9 +216,9 @@ function DoneState() {
       {/* CTA */}
       <button
         onClick={() => window.close()}
-        style={primaryBtnStyle}
-        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#6D28D9')}
-        onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#7C3AED')}
+        style={doneBtnStyle}
+        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#9061f9')}
+        onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#a78bfa')}
       >
         Close window
       </button>
@@ -303,6 +295,21 @@ const primaryBtnStyle: React.CSSProperties = {
   width: '100%',
   height: 44,
   backgroundColor: '#7C3AED',
+  color: '#ffffff',
+  border: 'none',
+  borderRadius: 14,
+  fontSize: 16,
+  lineHeight: '24px',
+  fontWeight: 600,
+  letterSpacing: '-0.4px',
+  cursor: 'pointer',
+  transition: 'background-color 0.15s ease',
+}
+
+const doneBtnStyle: React.CSSProperties = {
+  width: '100%',
+  height: 44,
+  backgroundColor: '#a78bfa',
   color: '#ffffff',
   border: 'none',
   borderRadius: 14,
