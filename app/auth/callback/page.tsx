@@ -57,7 +57,7 @@ export default function AuthCallback() {
       }
 
       if (state) {
-        const { error } = await supabase.from('pending_auth').upsert({
+        const { error } = await supabase.from('pending_auth').insert({
           state,
           access_token,
           refresh_token,
