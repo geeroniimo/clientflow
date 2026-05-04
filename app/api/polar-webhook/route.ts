@@ -62,13 +62,82 @@ export async function POST(request: NextRequest) {
       .from('user_profiles')
       .update({
         subscription_status: 'active',
-        subscription_id: order.customerId, // store Polar customerId for portal lookups
+        subscription_id: order.customerId,
         subscription_plan: 'pro',
       })
       .eq('id', userId)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+  }
+
+  // ── Dynamic pricing: increment product price by $1 on every paid order ──
+  if (event.type === 'order.paid') {
+    const order = (event as {
+      data: {
+        product: { id: string }
+        billingReason?: string
+      }
+    }).data
+
+    // Only react to one-time purchases, not subscription renewals
+    if (order.billingReason && order.billingReason !== 'purchase') {
+      return NextResponse.json({ received: true, skipped: 'not a one-time purchase' })
+    }
+
+    const productId = order.product.id
+    const token = process.env.POLAR_ACCESS_TOKEN!
+    const baseUrl = 'https://api.polar.sh'
+
+    try {
+      // 1. Fetch current product to read the existing price
+      const productRes = await fetch(`${baseUrl}/v1/products/${productId}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      })
+
+      if (!productRes.ok) {
+        console.error('[polar-webhook] failed to fetch product:', await productRes.text())
+        return NextResponse.json({ received: true, warning: 'Could not fetch product' })
+      }
+
+      const product = await productRes.json()
+
+      // Find the first fixed one-time price
+      const currentPrice = (product.prices as any[]).find(
+        (p: any) => p.type === 'one_time' && p.amount_type === 'fixed'
+      )
+
+      if (!currentPrice) {
+        return NextResponse.json({ received: true, warning: 'No fixed one-time price found' })
+      }
+
+      const newAmount = currentPrice.price_amount + 100 // +$1 (cents)
+
+      // 2. Patch the product with the incremented price
+      // Omitting the existing price ID removes it; supplying a new object creates it.
+      const patchRes = await fetch(`${baseUrl}/v1/products/${productId}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prices: [
+            {
+              type: 'one_time',
+              amount_type: 'fixed',
+              price_amount: newAmount,
+              price_currency: currentPrice.price_currency ?? 'usd',
+            },
+          ],
+        }),
+      })
+
+      if (!patchRes.ok) {
+        console.error('[polar-webhook] failed to update price:', await patchRes.text())
+        return NextResponse.json({ received: true, warning: 'Price update failed' })
+      }
+    } catch (err) {
+      console.error('[polar-webhook] dynamic pricing error:', err)
+      return NextResponse.json({ received: true, warning: 'Unexpected error during price update' })
     }
   }
 
