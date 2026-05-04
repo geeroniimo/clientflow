@@ -36,32 +36,22 @@ export default function AuthCallback() {
     }
 
     const save = async () => {
-      if (window.opener) {
-        try {
-          window.opener.postMessage(
-            { type: 'CF_OAUTH_CALLBACK', access_token, refresh_token },
-            'https://clientflow.design'
-          )
-          window.close()
-          setStatus('done')
-          return
-        } catch (_) {
-          // Fall through to server-side relay
-        }
+      if (!state) {
+        setErrorMsg('Missing state parameter.')
+        setStatus('error')
+        return
       }
 
-      if (state) {
-        const res = await fetch('/api/relay-auth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ state, access_token, refresh_token }),
-        })
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({}))
-          setErrorMsg(json.error || 'Failed to relay session.')
-          setStatus('error')
-          return
-        }
+      const res = await fetch('/api/relay-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state, access_token, refresh_token }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        setErrorMsg(json.error || 'Failed to relay session.')
+        setStatus('error')
+        return
       }
 
       setStatus('done')
