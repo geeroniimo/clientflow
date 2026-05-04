@@ -1,12 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 /**
  * OAuth callback page.
@@ -57,13 +51,14 @@ export default function AuthCallback() {
       }
 
       if (state) {
-        const { error } = await supabase.from('pending_auth').insert({
-          state,
-          access_token,
-          refresh_token,
+        const res = await fetch('/api/relay-auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state, access_token, refresh_token }),
         })
-        if (error) {
-          setErrorMsg('Failed to relay session: ' + error.message)
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}))
+          setErrorMsg(json.error || 'Failed to relay session.')
           setStatus('error')
           return
         }
