@@ -113,6 +113,23 @@ export async function POST(request: NextRequest) {
       }
 
       const newAmount = currentPrice.price_amount + 100 // +$1 (cents)
+      const dryRun = process.env.POLAR_PRICING_DRY_RUN === 'true'
+
+      if (dryRun) {
+        // Dry-run: log what would happen, skip the actual PATCH
+        console.log('[polar-webhook] DRY RUN — would update price:', {
+          productId,
+          currentAmount: currentPrice.price_amount,
+          newAmount,
+          currency: currentPrice.price_currency ?? 'usd',
+        })
+        return NextResponse.json({
+          received: true,
+          dryRun: true,
+          currentAmount: currentPrice.price_amount,
+          newAmount,
+        })
+      }
 
       // 2. Patch the product with the incremented price
       // Omitting the existing price ID removes it; supplying a new object creates it.
