@@ -9,7 +9,7 @@
   console.log('🎯 ClientFlow: Script loaded');
   
   const projectId = window.clientFlowProjectId;
-  const apiUrl = window.clientFlowApiUrl || 'https://nonotubbly-unenthusiastic-catherina.ngrok-free.dev';
+  const apiUrl = window.clientFlowApiUrl || 'https://api.clientflow.design';
 
   if (!projectId) {
     console.error('❌ ClientFlow: No project ID found');
